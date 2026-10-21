@@ -1,0 +1,53 @@
+# ADR 0003: PostgreSQL como armazenamento
+
+- **Status:** Proposta ✎
+- **Data:** 2026-10-20
+
+## Contexto
+
+O sistema precisa guardar o dado bruto de cada coleta sem alterá-lo (para poder reprocessar), as vagas já limpas e normalizadas, as skills extraídas e as análises. O volume é de milhares de vagas, com escrita em lotes e consultas analíticas moderadas. O autor já tem experiência com PostgreSQL.
+
+## Fatores de decisão
+
+- Suporte a dado semiestruturado (resposta bruta das fontes) e a dado relacional
+- Idempotência: reexecutar a coleta não pode duplicar dados
+- Facilidade de rodar localmente
+- Familiaridade do autor
+- Simplicidade para análise
+
+## Opções consideradas
+
+### A. PostgreSQL
+
+- Bom: tipo JSONB para o dado bruto, restrições de unicidade para idempotência, migrações com Alembic, ampla documentação.
+- Ruim: exige um servidor rodando, mesmo localmente (via Docker).
+
+### B. SQLite
+
+- Bom: sem servidor, arquivo único.
+- Ruim: menos recursos para dado semiestruturado e para concorrência; menos próximo de um ambiente real.
+
+### C. DuckDB e arquivos Parquet
+
+- Bom: excelente para análise local, sem servidor.
+- Ruim: menos adequado para escritas incrementais e para garantir unicidade; o autor tem menos experiência.
+
+## Decisão
+
+**Opção A: PostgreSQL** ✎, executado em Docker Compose para desenvolvimento.
+
+- O dado bruto fica em colunas JSONB.
+- Cada vaga tem uma chave de identidade (fonte e identificador original), com restrição de unicidade, para garantir a idempotência.
+- O esquema é versionado com migrações.
+
+## Consequências
+
+**Positivas**
+
+- Uma única tecnologia atende ao dado bruto e ao dado tratado.
+- Idempotência garantida pelo próprio banco.
+
+**Negativas**
+
+- É preciso subir um servidor para rodar o projeto, o que pesa na reprodutibilidade (mitigado pelo Docker Compose).
+- Se a ADR 0002 for mantida (resultados publicados como arquivos estáticos), as saídas analíticas podem ser exportadas em formato de arquivo, e o banco serve apenas ao pipeline. A escolha de armazenamento poderá ser revisitada se o banco ficar sem utilidade além do pipeline.

@@ -1,0 +1,72 @@
+# ADR 0001: Monólito modular como estilo arquitetural
+
+- **Status:** Proposta ✎
+- **Data:** 2026-10-20
+
+## Contexto
+
+O sistema coleta vagas de algumas fontes, trata os textos, extrai skills e produz análises. As características relevantes são:
+
+- um único desenvolvedor, com tempo limitado;
+- processamento em lotes (execução agendada), e não em tempo real;
+- volume na ordem de milhares de vagas;
+- objetivo de aprendizado e portfólio, com custo de operação próximo de zero;
+- as fontes de vagas tendem a mudar ou sair do ar, o que exige isolar cada uma.
+
+Esta ADR trata de **como o código é organizado e implantado**. Onde o sistema roda e como o usuário o acessa é decidido na ADR 0002.
+
+## Fatores de decisão
+
+- Simplicidade operacional (poucos componentes para configurar, monitorar e depurar)
+- Facilidade de testar
+- Facilidade de trocar ou acrescentar fontes
+- Custo
+- Capacidade de explicar e defender cada escolha
+
+## Opções consideradas
+
+### A. Monólito modular
+
+Uma única unidade de implantação, com módulos internos bem separados (`domain`, `ingestion`, `processing`, `storage`, `analytics`, `api`).
+
+- Bom: simples de rodar, testar e depurar; refatorar fronteiras é barato.
+- Ruim: sem disciplina, as fronteiras entre módulos se desfazem; todos os módulos sobem e escalam juntos.
+
+### B. Microsserviços (ingestão, processamento, API)
+
+Serviços independentes que se comunicam por rede ou fila.
+
+- Bom: escala e implanta cada parte separadamente.
+- Ruim: complexidade de rede, mensageria, observabilidade e implantação desproporcional para um desenvolvedor e um volume pequeno.
+
+### C. Scripts e notebooks soltos
+
+- Bom: começo mais rápido.
+- Ruim: difícil de testar e reexecutar com segurança; sem fronteiras claras; não demonstra práticas de engenharia.
+
+## Decisão
+
+**Opção A: monólito modular** ✎, com estas regras:
+
+- `domain` não depende de nenhuma biblioteca externa nem de outros módulos; contém entidades e regras de negócio.
+- Os demais módulos dependem de `domain`, e não o contrário.
+- As fontes de vagas ficam atrás de uma interface comum, com um adaptador por fonte, em `ingestion`.
+- As fronteiras são verificadas automaticamente no CI, com uma ferramenta de análise de importações ✎ (por exemplo, import-linter).
+
+## Consequências
+
+**Positivas**
+
+- Poucos componentes para operar; um clone novo sobe o sistema com um comando.
+- Testes de unidade no `domain` sem infraestrutura.
+- Trocar uma fonte afeta apenas um adaptador.
+
+**Negativas**
+
+- A separação depende de disciplina e de verificação automática.
+- Não é possível escalar um módulo isoladamente. Para o volume previsto, isso não é um problema.
+- Se o volume ou o número de pessoas crescer muito, será preciso extrair partes do monólito, o que terá custo.
+
+## Referências
+
+- Artigo do autor sobre estilos e padrões arquiteturais ✎ (citar a seção que fundamenta a escolha)

@@ -1,0 +1,83 @@
+# ADR 0002: Modelo de implantação e entrega dos resultados
+
+- **Status:** Aceita (decisão do autor), a revisitar se surgir necessidade de consultas dinâmicas
+- **Data:** 2026-10-20
+
+## Contexto
+
+Existem três públicos com necessidades diferentes:
+
+| Público | O que precisa |
+|---|---|
+| Usuário final (profissional ou estudante de TI) | Abrir uma página, informar suas skills e ver a análise, sem montar banco nem rodar o pipeline |
+| Quem avalia o repositório | Rodar o projeto em poucos comandos e reproduzir os resultados |
+| O autor (mantenedor) | Atualizar os dados periodicamente a baixo custo |
+
+Além disso:
+
+- O perfil informado pelo usuário (lista de skills, e no futuro um currículo) é dado pessoal.
+- A interface não deve acessar o banco diretamente (exporia credenciais e dispensaria controle de acesso).
+- O custo de manter um servidor ligado deve ser avaliado, porque o autor o arcaria.
+
+Esta ADR trata de **onde o pipeline roda, onde o resultado fica e como o usuário o consome**. O estilo do código está na ADR 0001.
+
+## Fatores de decisão
+
+- Custo e esforço de manutenção
+- Facilidade de uso para o usuário final
+- Privacidade do perfil do usuário
+- Reprodutibilidade para quem avalia
+- Segurança (superfície exposta)
+- Frescor dos dados
+
+## Opções consideradas
+
+### A. Tudo local
+
+Cada usuário roda o pipeline e o banco na própria máquina.
+
+- Bom: nenhum custo de hospedagem; o perfil nunca sai da máquina.
+- Ruim: o usuário final precisa de Docker e de tempo para a primeira coleta. Inviável para o público não técnico.
+
+### B. Servidor hospedado
+
+API e banco ligados continuamente; a interface consulta a API.
+
+- Bom: consultas dinâmicas; dados sempre atualizados no servidor.
+- Ruim: custo recorrente, manutenção, segurança e disponibilidade; o perfil do usuário trafega até o servidor (dado pessoal).
+
+### C. Publicação de resultados já processados
+
+O pipeline roda de forma agendada, sob controle do autor, e publica arquivos estáticos (agregados por skill, fonte e estrato, mais uma matriz compacta de skills por vaga, sem texto nem dados pessoais). Uma página estática consome esses arquivos, e a cobertura do perfil é calculada no navegador.
+
+- Bom: custo de execução próximo de zero; o perfil não sai do navegador; sem servidor de banco para proteger.
+- Ruim: sem consultas arbitrárias; os dados só mudam a cada execução do pipeline; a regra de cobertura passa a existir em duas linguagens (Python no pipeline e JavaScript no navegador).
+
+### D. Híbrido (C para o usuário final, A para desenvolvimento e avaliação)
+
+Docker Compose permite reproduzir o pipeline completo localmente, e os resultados publicados atendem ao usuário final.
+
+## Decisão
+
+**Opção D**, por decisão do autor:
+
+- Docker Compose para desenvolvimento e reprodução (PostgreSQL local, ver ADR 0003).
+- Publicação periódica de resultados estáticos para o usuário final.
+- A opção B fica **adiada**. Será reconsiderada se surgir uma necessidade que a publicação estática não atenda, como consultas dinâmicas.
+
+**Motivos do autor:** evitar a manutenção de um servidor e de um banco hospedados, e evitar o cadastro em serviços de hospedagem gratuita. Os arquivos estáticos podem ser servidos pelo GitHub Pages, que a documentação do GitHub descreve como disponível em repositórios públicos do plano gratuito, com limite de 1 GB por site e limite flexível de 100 GB de banda por mês ✎ (conferir os limites vigentes antes de publicar).
+
+## Consequências
+
+**Positivas**
+
+- Custo e manutenção mínimos.
+- Privacidade do perfil por construção.
+- A etapa de pipeline e extração não depende desta decisão e pode ser desenvolvida antes dela.
+
+**Negativas**
+
+- A regra de cobertura é implementada duas vezes. Mitigação: um conjunto único de casos de teste, compartilhado entre as duas implementações.
+- Os dados ficam defasados entre execuções. O resultado deve mostrar a data da última coleta.
+- Exige um front-end estático, o que acrescenta trabalho em JavaScript.
+- A atualização depende de o autor rodar o pipeline. Automatizar com um agendador (por exemplo, GitHub Actions) é possível, mas exige resolver onde guardar o estado entre execuções, já que os executores são descartáveis.
